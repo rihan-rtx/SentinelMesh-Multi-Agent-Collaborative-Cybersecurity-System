@@ -1,0 +1,108 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+/* ---------------------------------------------------------------------------
+   Base Styles
+   --------------------------------------------------------------------------- */
+
+:root {
+  --sentinel-bg: #0B1120;
+  --sentinel-card: #111827;
+  --sentinel-primary: #2563EB;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: var(--sentinel-bg);
+  color: #ffffff;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ---------------------------------------------------------------------------
+   Scrollbar Styling
+   --------------------------------------------------------------------------- */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #374151;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #4B5563;
+}
+
+/* ---------------------------------------------------------------------------
+   Shimmer Animation
+   --------------------------------------------------------------------------- */
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s linear infinite;
+  background-size: 200% 100%;
+}
+
+/* ---------------------------------------------------------------------------
+   Glass Effect
+   --------------------------------------------------------------------------- */
+
+.glass {
+  background: rgba(17, 24, 39, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(31, 41, 55, 0.5);
+}
+
+/* ---------------------------------------------------------------------------
+   Glow Effects
+   --------------------------------------------------------------------------- */
+
+.glow-green {
+  box-shadow: 0 0 15px rgba(34, 197, 94, 0.3), 0 0 30px rgba(34, 197, 94, 0.1);
+}
+
+.glow-red {
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.3), 0 0 30px rgba(239, 68, 68, 0.1);
+}
+
+.glow-amber {
+  box-shadow: 0 0 15px rgba(245, 158, 11, 0.3), 0 0 30px rgba(245, 158, 11, 0.1);
+}
+
+.glow-blue {
+  box-shadow: 0 0 15px rgba(37, 99, 235, 0.3), 0 0 30px rgba(37, 99, 235, 0.1);
+}
+
+.glow-cyan {
+  box-shadow: 0 0 15px rgba(34, 211, 238, 0.3), 0 0 30px rgba(34, 211, 238, 0.1);
+}

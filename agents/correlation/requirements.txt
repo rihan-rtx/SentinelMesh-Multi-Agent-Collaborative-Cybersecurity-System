@@ -1,0 +1,8 @@
+# SentinelMesh — Correlation Agent requirements
+
+pydantic>=2.0,<3.0
+confluent-kafka>=2.3,<3.0
+redis>=5.0,<6.0
+python-dotenv>=1.0,<2.0
+prometheus-client>=0.20,<1.0
+python-json-logger>=2.0,<3.0

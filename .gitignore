@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Environment files (actual secrets — .env.example is committed)
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Docker
+*.log
+
+# Datasets (too large for git)
+datasets/*.pcap
+datasets/*.csv
+
+# Test artifacts
+.pytest_cache/
+htmlcov/
+.coverage
+.env
+.env.*
+!.env.example
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+node_modules/
+.pytest_cache/

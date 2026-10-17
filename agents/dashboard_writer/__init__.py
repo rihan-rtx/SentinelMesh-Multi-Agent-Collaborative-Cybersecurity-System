@@ -1,0 +1,1 @@
+# SentinelMesh — Dashboard Writer Agent

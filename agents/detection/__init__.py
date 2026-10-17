@@ -1,0 +1,1 @@
+"""SentinelMesh — Detection Agent package."""

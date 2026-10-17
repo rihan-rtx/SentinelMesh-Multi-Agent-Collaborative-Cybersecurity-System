@@ -1,0 +1,10 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY shared/ /app/shared/
+COPY infra/topic_init.py /app/topic_init.py
+
+RUN pip install --no-cache-dir confluent-kafka pydantic
+
+CMD ["python", "topic_init.py"]

@@ -1,0 +1,313 @@
+# ==========================================================================
+# SentinelMesh — Docker Compose (all services)
+#
+# Kafka in KRaft mode (no Zookeeper), Redis, PostgreSQL, Prometheus, Grafana.
+# Agent containers will be added in later phases as they are implemented.
+#
+# Usage:
+#   docker compose up -d            # start infrastructure
+#   docker compose down -v          # stop and remove volumes
+# ==========================================================================
+
+services:
+  # -------------------------------------------------------------------
+  # Kafka — KRaft mode (single-node, no Zookeeper)
+  # -------------------------------------------------------------------
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: sentinelmesh-kafka
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+      - "9093:9093"
+    environment:
+      # KRaft mode configuration for Confluent image
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,EXTERNAL://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      # Auto-create topics disabled — we create them explicitly
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # -------------------------------------------------------------------
+  # Redis — shared state (Detection + Correlation agents, health pings)
+  # -------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: sentinelmesh-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # -------------------------------------------------------------------
+  # PostgreSQL — dashboard data store (Section 10.9)
+  # -------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: sentinelmesh-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-sentinelmesh}
+      POSTGRES_USER: ${POSTGRES_USER:-sentinelmesh}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # -------------------------------------------------------------------
+  # Prometheus — metrics collection (Section 10.10)
+  # -------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: sentinelmesh-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infra/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      - kafka
+
+  # -------------------------------------------------------------------
+  # Grafana — dashboard (Section 10.9)
+  # -------------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: sentinelmesh-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: sentinelmesh
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/sentinelmesh.json
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+      - postgres
+
+  # -------------------------------------------------------------------
+  # Topic initializer — creates all Kafka topics on startup
+  # -------------------------------------------------------------------
+  topic-init:
+    build:
+      context: .
+      dockerfile: infra/Dockerfile.topic-init
+    container_name: sentinelmesh-topic-init
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: "no"
+
+  # -------------------------------------------------------------------
+  # Sniffer Agent (Phase 2)
+  # network_mode: host removed -- breaks Docker's internal DNS resolution
+  # for kafka:9092/redis, and is unreliable on Docker Desktop Windows/Mac
+  # anyway. This means SNIFFER_MODE=live capture through this container is not
+  # functional; SNIFFER_MODE=pcap (used for all testing and the demo replay
+  # via tcpreplay per Section 6) is unaffected.
+  # -------------------------------------------------------------------
+  sniffer:
+    build:
+      context: .
+      dockerfile: agents/sniffer/Dockerfile
+    container_name: sentinelmesh-sniffer
+    env_file: .env
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      REDIS_HOST: redis
+      PROMETHEUS_PORT_SNIFFER: 9101
+    volumes:
+      - ./pcaps:/pcaps:ro
+    depends_on:
+      kafka:
+        condition: service_healthy
+      topic-init:
+        condition: service_completed_successfully
+    deploy:
+      restart_policy:
+        condition: on-failure
+        max_attempts: 5
+
+  # -------------------------------------------------------------------
+  # DPI Agent (Phase 2)
+  # -------------------------------------------------------------------
+  dpi:
+    build:
+      context: .
+      dockerfile: agents/dpi/Dockerfile
+    container_name: sentinelmesh-dpi
+    env_file: .env
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      REDIS_HOST: redis
+      PROMETHEUS_PORT_DPI: 9102
+    depends_on:
+      kafka:
+        condition: service_healthy
+      topic-init:
+        condition: service_completed_successfully
+    deploy:
+      restart_policy:
+        condition: on-failure
+        max_attempts: 5
+
+  # -------------------------------------------------------------------
+  # Detection Agent (Phase 3)
+  # -------------------------------------------------------------------
+  detection:
+    build:
+      context: .
+      dockerfile: agents/detection/Dockerfile
+    container_name: sentinelmesh-detection
+    env_file: .env
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      REDIS_HOST: redis
+      PROMETHEUS_PORT_DETECTION: 9103
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      topic-init:
+        condition: service_completed_successfully
+    deploy:
+      restart_policy:
+        condition: on-failure
+        max_attempts: 5
+
+  # -------------------------------------------------------------------
+  # Correlation Agent (Phase 4)
+  # -------------------------------------------------------------------
+  correlation:
+    build:
+      context: .
+      dockerfile: agents/correlation/Dockerfile
+    container_name: sentinelmesh-correlation
+    env_file: .env
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      REDIS_HOST: redis
+      PROMETHEUS_PORT_CORRELATION: 9104
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      topic-init:
+        condition: service_completed_successfully
+    deploy:
+      restart_policy:
+        condition: on-failure
+        max_attempts: 5
+
+  # -------------------------------------------------------------------
+  # Response Agent (Phase 3)
+  # -------------------------------------------------------------------
+  response:
+    build:
+      context: .
+      dockerfile: agents/response/Dockerfile
+    container_name: sentinelmesh-response
+    env_file: .env
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      PROMETHEUS_PORT_RESPONSE: 9105
+    depends_on:
+      kafka:
+        condition: service_healthy
+      topic-init:
+        condition: service_completed_successfully
+    deploy:
+      restart_policy:
+        condition: on-failure
+        max_attempts: 5
+
+  # -------------------------------------------------------------------
+  # Coordinator Agent (Phase 3)
+  # -------------------------------------------------------------------
+  coordinator:
+    build:
+      context: .
+      dockerfile: agents/coordinator/Dockerfile
+    container_name: sentinelmesh-coordinator
+    env_file: .env
+    environment:
+      REDIS_HOST: redis
+      PROMETHEUS_PORT_COORDINATOR: 9106
+    depends_on:
+      redis:
+        condition: service_healthy
+    deploy:
+      restart_policy:
+        condition: on-failure
+        max_attempts: 5
+
+  # -------------------------------------------------------------------
+  # Dashboard Writer (Phase 5)
+  # Consumes detections, incidents, actions → upserts into Postgres
+  # so Grafana panels have live data.
+  # -------------------------------------------------------------------
+  dashboard-writer:
+    build:
+      context: .
+      dockerfile: agents/dashboard_writer/Dockerfile
+    container_name: sentinelmesh-dashboard-writer
+    env_file: .env
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      REDIS_HOST: redis
+      POSTGRES_HOST: postgres
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      topic-init:
+        condition: service_completed_successfully
+    deploy:
+      restart_policy:
+        condition: on-failure
+        max_attempts: 5
+
+volumes:
+  kafka_data:
+  redis_data:
+  postgres_data:
+  prometheus_data:
+  grafana_data:

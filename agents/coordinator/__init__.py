@@ -1,0 +1,1 @@
+"""SentinelMesh — Coordinator Agent package."""

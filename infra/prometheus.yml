@@ -1,0 +1,45 @@
+# ==========================================================================
+# Prometheus configuration — scrapes all agent /metrics endpoints
+# Section 10.10: scraped every 5s
+# ==========================================================================
+
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: "sentinelmesh-sniffer"
+    static_configs:
+      - targets: ["host.docker.internal:9101"]
+        labels:
+          agent: "sniffer"
+
+  - job_name: "sentinelmesh-dpi"
+    static_configs:
+      - targets: ["dpi:9102"]
+        labels:
+          agent: "dpi"
+
+  - job_name: "sentinelmesh-detection"
+    static_configs:
+      - targets: ["detection:9103"]
+        labels:
+          agent: "detection"
+
+  - job_name: "sentinelmesh-correlation"
+    static_configs:
+      - targets: ["correlation:9104"]
+        labels:
+          agent: "correlation"
+
+  - job_name: "sentinelmesh-response"
+    static_configs:
+      - targets: ["response:9105"]
+        labels:
+          agent: "response"
+
+  - job_name: "sentinelmesh-coordinator"
+    static_configs:
+      - targets: ["coordinator:9106"]
+        labels:
+          agent: "coordinator"

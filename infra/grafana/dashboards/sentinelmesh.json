@@ -1,0 +1,96 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "title": "Live Traffic Classification (Last 5 min)",
+      "type": "piechart",
+      "datasource": "PostgreSQL",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "rawSql": "SELECT classification, COUNT(*) AS count FROM detections WHERE ts > NOW() - INTERVAL '5 minutes' GROUP BY classification",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "title": "Incident Timeline",
+      "type": "table",
+      "datasource": "PostgreSQL",
+      "gridPos": { "h": 8, "w": 16, "x": 8, "y": 0 },
+      "targets": [
+        {
+          "rawSql": "SELECT incident_id, ts_opened, ts_updated, src_ip, incident_type, severity, status FROM incidents ORDER BY ts_updated DESC LIMIT 50",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "title": "Per-Agent Health",
+      "type": "stat",
+      "datasource": "Prometheus",
+      "gridPos": { "h": 4, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "sentinelmesh_agent_up",
+          "legendFormat": "{{agent}}"
+        }
+      ]
+    },
+    {
+      "title": "Throughput (flows/sec, detections/sec)",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "expr": "rate(sentinelmesh_events_produced_total{topic=\"flow-events\"}[1m])",
+          "legendFormat": "flows/sec"
+        },
+        {
+          "expr": "rate(sentinelmesh_events_produced_total{topic=\"detections\"}[1m])",
+          "legendFormat": "detections/sec"
+        }
+      ]
+    },
+    {
+      "title": "Top Source IPs by Detection Count (Last 15 min)",
+      "type": "table",
+      "datasource": "PostgreSQL",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "targets": [
+        {
+          "rawSql": "SELECT d.flow_id, d.classification, d.confidence, d.attack_type, d.ts FROM detections d WHERE d.ts > NOW() - INTERVAL '15 minutes' AND d.classification != 'benign' ORDER BY d.ts DESC LIMIT 50",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "title": "DPI Signature Hit Counts",
+      "type": "barchart",
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "targets": [
+        {
+          "expr": "sentinelmesh_events_produced_total{agent=\"dpi\",topic=\"dpi-findings\"}",
+          "legendFormat": "{{agent}}"
+        }
+      ]
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 39,
+  "tags": ["sentinelmesh"],
+  "templating": { "list": [] },
+  "time": { "from": "now-30m", "to": "now" },
+  "timepicker": {},
+  "timezone": "",
+  "title": "SentinelMesh Dashboard",
+  "uid": "sentinelmesh-main",
+  "version": 1
+}
